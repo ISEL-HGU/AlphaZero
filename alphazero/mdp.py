@@ -1,124 +1,170 @@
 """MDP definitions.
 """
-
-import numpy as np
+import tensorflow as tf
 
 class Observation():
-    """MDP observation interface.
-   
-    Class that extend this class should implement `is_terminal()` method. 
+    """Base observation class.  
+    
+    Class that extends this class should override `is_terminal()` and  
+    `to_args()`.
+    
+    Attributes:
+        _val (tf.Tensor): Observation array.
     """
+
+    def __init__(self, val: tf.Tensor):
+        """Initialize `Observation` instance.
+
+        Args:
+            val (tf.Tensor): Observation array.
+        """
+        self._val = val
 
     def is_terminal(self) -> bool:
         """Check whether this instance represents terminal observation or not.
 
         Returns:
-            bool: `true` if this instance represents terminal obervation,  
-                `false` otherwise.
+            bool: `True` if this instance represents terminal obervation,  
+                `False` otherwise.
         """
-        raise NotImplementedError(f'class {self.__class__.__name__} did not \
-                                  implement is_terminal().')
-
-class State():
-    """MDP state interface.  
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  is_terminal().')
     
-    Class that implements this interface should override `_check_terminal()`   
+    def to_args(self) -> tuple:
+        """Convert this instance into arguments for creating state.
+
+        Returns:
+            tuple: Arguments for creating state.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  to_args().')
+    
+    def get_val(self) -> tf.Tensor:
+        return self._val
+        
+class State():
+    """Base state class.  
+    
+    Class that extends this class should override `_check_terminal()`  
     and `_create_init_val()`.
     
     Attributes:
-        _is_terminal (bool): Boolean value that indicates whether this   
-                instance is terminal or not.
-        _val (np.ndarray): State value.
+        _val (tf.Tensor): State array.
     """
     
-    def __init__(self, val: np.ndarray):
+    def __init__(self, val: tf.Tensor):
         """Initialize `State` instance.
 
         Args:
-            val (np.ndarray): State value to be initialized.
+            val (tf.Tensor): State array.
         """
+        self._val = val
     
-    def _check_terminal(self, val: np.ndarray) -> bool:
-        """Check whether `val` is terminal or not.
-
-        Args:
-            val (np.ndarray): State value to be checked.
+    def is_terminal(self) -> bool:
+        """Check whether this instance represents terminal state or not.
 
         Returns:
-            bool: `True` if `val` is terminal, `False` otherwise. 
-        """ 
+            bool: `True` if this instance represents terminal state, `False`  
+                otherwise.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  is_terminal().')
     
-    @classmethod
-    def initial(cls, *args) -> 'State':
-        """Create `State` instance that represents initial state. 
-        
-        Args:
-            *args: Arguments for creating initial state value.
-
-        Returns:
-            State: The `State` instance.
-        """
-        
-    @classmethod
-    def _create_init_val(cls, *args) -> np.ndarray:
-        """Create initial state value.
-
-        Args:
-            *args: Arguments for creating the state value.
-
-        Returns:
-            np.ndarray: The state value.
-        """
-    
-    def get_is_terminal(self) -> bool:
-        """Get boolean value that indicates whether this instance is terminal   
-        or not.
-
-        Returns:
-            bool: `True` if this instance is terminal state, `False` otherwise.
-        """
-    
-    def get_val(self) -> np.ndarray:
-        """Get state value.
-
-        Returns:
-            np.ndarray: The state value.
-        """
+    def get_val(self) -> tf.Tensor:
+        return self._val
 
 class Action():
-    """MDP action interface.
+    """Base action class.
+    
+    Class that extends this class should override `to_arr()`.  
+    Overriding `__str__()` helps debugging since training and inference logic  
+    use the method for debugging purpose.
     
     Attributes:
-        _val (int): Action value.
+        _val (int): Action number.
     """
     
     def __init__(self, val: int):
         """Initialize `Action` instance.
         
         Args:
-            val (int): Action value to be initialized.
+            val (int): Action number.
         """    
+        self._val = val
+    
+    def to_arr(self) -> tf.Tensor:
+        """Convert this instance into array representation.
+        
+        Returns:
+            tf.Tensor: The array representation.
+        """ 
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  to_arr().')
+        
+    def get_val(self) -> int:
+        return self._val
              
 class Reward():
-    """MDP reward interface.
+    """Base reward class.  
+    
+    Class that extends this class should override `__add__()`.  
+    Overriding `__str__()` helps debugging since training and inference logic  
+    use the method for debugging purpose.
     
     Attributes:
         _val (float): Reward value.
-        __add__ (function): Add magic method.
     """
     
     def __init__(self, val: float):
         """Initialize `Reward` instance.
 
         Args:
-            val (float): Reward value to be initialized.
+            val (float): Reward value.
         """
+        self._val = val
     
     def __add__(self, other):
-        """Add magic method.""" 
-
+        return self._val + other
+    
 class MDPFactory():
     """Abstract factory that creates `State`, `Action`, and `Reward` instances.
     
-    
+    Class that extends this class should override `create_state()`,   
+    `create_action()` and `create_reward()`.
     """
+
+    def create_state(self, *args) -> State:
+        """Create `State` instance.
+
+        Args:
+            *args: Arguments for creating `State` instance.
+            
+        Returns:
+            State: `State` instance.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  create_state().')
+        
+    def create_action(self, num: int) -> Action:
+        """Create `Action` instance.
+        
+        Args:
+            num (int): Action number.
+        
+        Returns:
+            Action: `Action` instance.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  create_action().')
+    
+    def create_reward(self, *args) -> Reward:
+        """Create `Reward` instance.
+
+        Args:
+            *args: Arguments for creating `Reward` instance.
+            
+        Returns:
+            Reward: `Reward` instance.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  create_reward().')
