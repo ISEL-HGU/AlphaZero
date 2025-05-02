@@ -1,7 +1,8 @@
 """Visitors for traversing state-action tree.
 """
+import tensorflow as tf
 
-from alphazero.forwardables.forwardable import Forwardable
+from alphazero.stepables.stepable import Stepable
 from alphazero.mdp import MDPFactory
 from alphazero.node import Node
 
@@ -13,31 +14,30 @@ class NodeVisitor():
     `select()`. 
     
     Attributes:
-        _forwardable (Forwardable): Simulator or neural network.
+        _model (AlphaZeroModel): AlphaZero model.
         _factory (MDPFactory): MDP factory.
-        _gamma (float): Discount factor.
+        _discount_factor (float): Discount factor.
         _is_multiagent (bool): Value of multiagent perspective.
     """
     
-    def __init__(self, forwardable: Forwardable, factory: MDPFactory, 
-                 gamma: float, multiagent: bool):
+    def __init__(self, model: AlphaZeroModel, factory: MDPFactory, 
+                 discount_factor: float, multiagent: bool):
         """Initialize `NodeVisitor` instance.
 
         Args:
-            forwardable (Forwardable): Simulator or neural network that can   
-                process one step.
+            model (AlphaZeroModel): AlphaZero model.
             factory (MDPFactory): MDP factory.
-            gamma (float): Discount factor
+            discount_factor (float): Discount factor
             multiagent (bool): Value that indicates whether the tree   
                 traversing is conducted in multiagent perspective or not.
         """
-        self._forwardable = forwardable
+        self._model = model
         self._factory = factory
-        self._gamma = gamma 
+        self._discount_factor = discount_factor 
         self._multiagent = multiagent
     
     def _pre_visit_internal(self, node: Node) -> int:
-        """Get action number for visiting child of the current internal node.  
+        """Get an action number of current internal node's child to visit.  
         
         Args: 
             node (Node): Internal node in which this instance is located.
@@ -47,7 +47,7 @@ class NodeVisitor():
         """
     
     def select(self, node: Node) -> int:
-        """Calculate action number of the current internal node's child.  
+        """Calculate action number of the given node's child to visit.  
 
         Args:
             node (Node): Internal node in which this instance is located.
@@ -70,7 +70,7 @@ class NodeVisitor():
         """
     
     def _backup(self, node: Node, v: float) -> float: 
-        """Update statistics of current node.
+        """Update statistics of the given node.
 
         Args:
             node (Node): Node in which this instance is located.
@@ -90,12 +90,37 @@ class NodeVisitor():
             float: State value of the current leaf node.
         """
     
+    def check_terminal(self, node: Node) -> bool:
+        """Check whether the given node is terminal or not.
+
+        Args:
+            node (Node): Node in which this instance is located.
+
+        Returns:
+            bool: `True` if the given node is terminal node, `False` otherwise.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  check_terminal().')
+    
     def _expand_and_eval(self, node: Node) -> float:
-        """Expand the children and evaluate state value of current leaf node.
+        """Expand the given node and evaluate the state value of the given  
+        node's children.
 
         Args:
             node (Node): Leaf node in which this instance is located.
 
         Returns:
-            float: State value of the current leaf node.
+            float: State value of the current leaf node's children.
         """
+    
+    def modify_priors(self, priors: tf.Tensor) -> list:
+        """Modify the given priors by adding noise.
+
+        Args:
+            priors (tf.Tensor): Prior probabilities.
+
+        Returns:
+            list: Prior probabilities with noise.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  modify_priors().')
