@@ -2,7 +2,7 @@
 """
 import tensorflow as tf
 
-from alphazero.mdp import Observation, State
+from alphazero.mdp import Action, Observation, Reward, State 
 from alphazero.strategy import PolicyImprovementStrategy
 from alphazero.visitor import NodeVisitor
 
@@ -35,6 +35,8 @@ class Node():
         self._o = None
         self._intern_s = intern_s
         self._a = a
+        self._r = 0
+        self._s = None
         self._p = p
         self._q = 0
         self._n = 0
@@ -59,18 +61,16 @@ class Node():
         return node
     
     def mcts(self, simulations: int, visitor: NodeVisitor) -> tf.Tensor:
-        """Conducts `simulations` number of simulations of monte-carlo tree   
-        search to this instance. 
+        """Conduct monte-carlo tree search for the given number of simulations. 
 
         Args:
-            o (Observation): Observation that this instance represents.
-            simulations (int): The number of simulations of tree search   
-                conducted.
+            simulations (int): The number of simulations.
+            visitor (NodeVisitor): Visitor that visits tree nodes.
         
         Returns:
             tf.Tensor: The policy of this instance.
         """
-        for i in range(simulations):
+        for _ in range(simulations):
             self._accept(visitor)
         
         return self._strat.improve(self)
@@ -109,13 +109,21 @@ class Node():
         
         return g
     
-    def _add(self, child: 'Node') -> None:
+    def add(self, child: 'Node') -> None:
         """Add child to this instance.
 
         Args:
             child (Node): Child node.
         """
         self._children.append(child)
+    
+    def is_root(self) -> bool:
+        """Check whether this instance is root or not.
+
+        Returns:
+            bool: `True` if this instance is root, `False` otherwise.
+        """
+        return True if self._o else False
     
     def _is_expanded(self) -> bool:
         """Check whether this instance is expanded or not.
@@ -124,11 +132,24 @@ class Node():
             bool: `True` if this instance is expanded, `False` otherwise.
         """ 
         return True if len(self._children) else False
-    
-    def _is_root(self) -> bool:
-        """Check whether this instance is root or not.
 
-        Returns:
-            bool: `True` if this instance is root, `False` otherwise.
-        """
-        return True if self._o else False
+    def get_o(self) -> Observation:
+        return self._o
+
+    def get_intern_s(self) -> State:
+        return self._intern_s
+
+    def get_a(self) -> Action or int:
+        return self._a
+
+    def get_r(self) -> Reward:
+        return self._r
+    
+    def set_a(self, a: Action) -> None:
+        self._a = a
+    
+    def set_r(self, r: Reward) -> None:
+        self._r = r
+    
+    def set_s(self, s: State) -> None:
+        self._s = s
