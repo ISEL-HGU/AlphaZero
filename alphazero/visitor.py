@@ -2,40 +2,31 @@
 """
 import tensorflow as tf
 
-from alphazero.stepables.stepable import Stepable
-from alphazero.mdp import MDPFactory
 from alphazero.node import Node
 
 class NodeVisitor():
     """Base node visitor.  
-      
-    Each node visitor conducts different action selection algorithm when  
-    traversing the tree. Class that inherits this class should override  
-    `select()`. 
+    
+    Node visitor conducts one simulation of mcts when traversing the tree.  
+    
+    Note:
+        Class that inherits this class should override `select()`. 
     
     Attributes:
-        _model (AlphaZeroModel): AlphaZero model.
-        _factory (MDPFactory): MDP factory.
+        _model (Model): Neural network model.
         _discount_factor (float): Discount factor.
-        _is_multiagent (bool): Value of multiagent perspective.
     """
     
-    def __init__(self, model: AlphaZeroModel, factory: MDPFactory, 
-                 discount_factor: float, multiagent: bool):
+    def __init__(self, model: Model, discount_factor: float):
         """Initialize `NodeVisitor` instance.
 
         Args:
-            model (AlphaZeroModel): AlphaZero model.
-            factory (MDPFactory): MDP factory.
-            discount_factor (float): Discount factor
-            multiagent (bool): Value that indicates whether the tree   
-                traversing is conducted in multiagent perspective or not.
+            model (Model): Neural network model.
+            discount_factor (float): Discount factor.
         """
         self._model = model
-        self._factory = factory
         self._discount_factor = discount_factor 
-        self._multiagent = multiagent
-    
+        
     def _pre_visit_internal(self, node: Node) -> int:
         """Get an action number of current internal node's child to visit.  
         
@@ -45,6 +36,7 @@ class NodeVisitor():
         Returns:
             int: Action number.
         """
+        return self.select(node)
     
     def select(self, node: Node) -> int:
         """Calculate action number of the given node's child to visit.  
@@ -68,6 +60,7 @@ class NodeVisitor():
         Returns:
             float: State value of the current internal node.
         """
+        return self._backup(node, v)
     
     def _backup(self, node: Node, v: float) -> float: 
         """Update statistics of the given node.
@@ -79,7 +72,9 @@ class NodeVisitor():
         Returns:
             float: State value of the current node.
         """
-    
+        return node.update(v if node.is_root() 
+                           else node.get_r() + self._discount_factor * v)
+       
     def _visit_leaf(self, node: Node) -> float:
         """Visit current leaf node.
 
@@ -89,6 +84,10 @@ class NodeVisitor():
         Returns:
             float: State value of the current leaf node.
         """
+        if self.check_terminal(node):
+            return 0
+        
+        return self._backup(node, self._expand_and_eval(node))
     
     def check_terminal(self, node: Node) -> bool:
         """Check whether the given node is terminal or not.
@@ -112,15 +111,95 @@ class NodeVisitor():
         Returns:
             float: State value of the current leaf node's children.
         """
+        if node.is_root():
+            s = Agent.factory.create_state(*self._model.encode(node.get_o()))
+            node.set_s(s)
+            
+            ps, v = self._model.estimate(s)
+            ps = self.modify_priors(ps)
+        else: 
+            a = Agent.factory.create_action(node.get_a())
+            node.set_a(a)
+            
+            r, s = self._model.process(node.get_intern_s(), a)
+            node.set_r(r)
+            node.set_s(s)
+            
+            ps, v = self._model.estimate(s)
+        
+        for i, p in enumerate(ps):
+            node.add(Node(s, i, p))
+        
+        return (-2 * self._is_multiagent + 1) * v 
     
-    def modify_priors(self, priors: tf.Tensor) -> list:
+    def modify_priors(self, ps: tf.Tensor) -> tf.Tensor:
         """Modify the given priors by adding noise.
-
+        
         Args:
-            priors (tf.Tensor): Prior probabilities.
+            ps (tf.Tensor): Prior probabilities.
 
         Returns:
-            list: Prior probabilities with noise.
+            tf.Tensor: Prior probabilities with noise.
         """
         raise NotImplementedError(f'class {self.__class__} did not override \
                                   modify_priors().')
+    
+    def reset(self) -> None:
+        """Reset states of this instance.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  reset().')
+    
+    @classmethod
+    def set_is_multiagent(cls, is_multiagent) -> None:
+        cls._is_multiagent = is_multiagent
+    
+    def set_model(self, model: Model) -> None:
+        self._model = model        
+
+class PUCTVisitor(NodeVisitor):
+    """Node visitor that uses PUCT algorithm for action selection.
+
+    Attributes:
+        _diric_param (float): Parameter of Dirichlet distribution.
+        _diric_weight (float): Weight of Dirichlet noise.  
+    """
+    
+    def __init__(self, model: Model, discount_factor: float, 
+                 diric_param: float, diric_weight: float):
+        """Initialize `PUCTVisitor` instance.
+
+        Args:
+            model (Model): Neural network model. 
+            discount_factor (float): Discount factor.
+            diric_param (float): Parameter of Dirichlet distribution.
+            diric_weight (float): Weight of Dirichlet noise.
+        """
+        super(PUCTVisitor, self).__init__(model, discount_factor)
+        
+        self._diric_param = diric_param
+        self._diric_weight = diric_weight
+    
+    def select(self, node: Node) -> int:
+        """Calculate action number of the given node's child node to visit  
+        using PUCT algorithm.
+            
+        Note:
+            This method overrides `select()` of `NodeVisitor`. 
+        """
+        
+    def modify_priors(self, ps: tf.Tensor) -> tf.Tensor:
+        """Modify the given priors by adding Dirichlet noise.
+        
+        Note:
+            This method overrides `modify_priors()` of `NodeVisitor`.        
+        """
+    
+    def reset(self) -> None:
+        """Reset states of this instance.
+        
+        This method does nothing since there are no states in this instance.
+        
+        Note:
+            Override `reset()` of `NodeVisitor`."""
+        pass
