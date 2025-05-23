@@ -4,27 +4,113 @@ import tensorflow as tf
 
 from alphazero.node import Node
 
+class Selector():
+    """Base selector.
+    
+    Selector modifies prior probabilities of root node and selects child node. 
+
+    Note:
+        Class that extends this class should override `select()`,  
+        `modify_priors()`, and `reset()`. 
+    """
+    def select(self, node: Node) -> int:
+        """Calculate action number of the given node's child to visit.  
+
+        Args:
+            node (Node): Internal node.
+
+        Returns:
+            int: Action number.
+        """
+        return NotImplementedError(f'class {self.__class__.__name__} did not \
+                                   implement select().')
+    
+    def modify_priors(self, priors: tf.Tensor) -> tf.Tensor:
+        """Modify the given priors by adding noise.
+        
+        Args:
+            priors (tf.Tensor): Prior probabilities.
+
+        Returns:
+            tf.Tensor: Prior probabilities with noise.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  modify_priors().')
+    
+    def reset(self) -> None:
+        """Reset states of this instance.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override \
+                                  reset().')
+
+class PUCTSelector(Selector):
+    """Selector that modifies prior probabilities with Dirichlet noise and  
+    selects child node with PUCT algorithm.
+
+    Attributes:
+        _diric_param (float): Dirichlet parameter.
+        _diric_weight (float): Dirichlet noise weight.
+    """
+    def __init__(self, diric_param: float, diric_weight: float):
+        """Initialize `PUCTSelector` instance.
+
+        Args:
+            diric_param (float): Dirichlet parameter.
+            diric_weight (float): Dirichlet noise weight.
+        """
+        self._diric_param = diric_param
+        self._diric_weight = diric_weight
+
+    def select(self, node: Node) -> int:
+        """Calculate action number of given node's child to visit with PUCT  
+        algorithm.
+        
+        Note: 
+            This method overrides `select()` of `Selector`.
+        """
+    
+    def modify_priors(self, priors: tf.Tensor) -> tf.Tensor:
+        """Modify the given priors by adding Dirichlet noise.
+        
+        Note:
+            This method overrides `modify_priors()` of `Selector`.        
+        """
+    
+    def reset(self) -> None:
+        """Reset states of this instance.
+        
+        This method does nothing since there are no states in this instance.
+        
+        Note:
+            Override `reset()` of `Selector`.
+        """
+        pass 
+
 class NodeVisitor():
     """Base node visitor.  
     
     Node visitor conducts one simulation of mcts when traversing the tree.  
     
     Note:
-        Class that inherits this class should override `select()`. 
+        Class that extends this class should override `check_terminal()`. 
     
     Attributes:
         _model (Model): Neural network model.
+         _selector (Selector): Selector.
         _discount_factor (float): Discount factor.
     """
     
-    def __init__(self, model: Model, discount_factor: float):
+    def __init__(self, model: Model, selector: Selector, 
+                 discount_factor: float):
         """Initialize `NodeVisitor` instance.
 
         Args:
             model (Model): Neural network model.
+            selector (Selector): Selector.
             discount_factor (float): Discount factor.
         """
         self._model = model
+        self._selector = selector
         self._discount_factor = discount_factor 
         
     def _pre_visit_internal(self, node: Node) -> int:
@@ -37,18 +123,6 @@ class NodeVisitor():
             int: Action number.
         """
         return self.select(node)
-    
-    def select(self, node: Node) -> int:
-        """Calculate action number of the given node's child to visit.  
-
-        Args:
-            node (Node): Internal node in which this instance is located.
-
-        Returns:
-            int: Action number.
-        """
-        return NotImplementedError(f'class {self.__class__.__name__} did not \
-                                   implement select().')
         
     def _post_visit_internal(self, node: Node, v: float) -> float:
         """Back up current internal node with its visited child's state value.
@@ -132,23 +206,10 @@ class NodeVisitor():
         
         return (-2 * self._is_multiagent + 1) * v 
     
-    def modify_priors(self, ps: tf.Tensor) -> tf.Tensor:
-        """Modify the given priors by adding noise.
-        
-        Args:
-            ps (tf.Tensor): Prior probabilities.
-
-        Returns:
-            tf.Tensor: Prior probabilities with noise.
-        """
-        raise NotImplementedError(f'class {self.__class__} did not override \
-                                  modify_priors().')
-    
     def reset(self) -> None:
-        """Reset states of this instance.
+        """Reset states of this instance's selector.
         """
-        raise NotImplementedError(f'class {self.__class__} did not override \
-                                  reset().')
+        self._selector.reset()
     
     @classmethod
     def set_is_multiagent(cls, is_multiagent) -> None:
@@ -156,50 +217,3 @@ class NodeVisitor():
     
     def set_model(self, model: Model) -> None:
         self._model = model        
-
-class PUCTVisitor(NodeVisitor):
-    """Node visitor that uses PUCT algorithm for action selection.
-
-    Attributes:
-        _diric_param (float): Parameter of Dirichlet distribution.
-        _diric_weight (float): Weight of Dirichlet noise.  
-    """
-    
-    def __init__(self, model: Model, discount_factor: float, 
-                 diric_param: float, diric_weight: float):
-        """Initialize `PUCTVisitor` instance.
-
-        Args:
-            model (Model): Neural network model. 
-            discount_factor (float): Discount factor.
-            diric_param (float): Parameter of Dirichlet distribution.
-            diric_weight (float): Weight of Dirichlet noise.
-        """
-        super(PUCTVisitor, self).__init__(model, discount_factor)
-        
-        self._diric_param = diric_param
-        self._diric_weight = diric_weight
-    
-    def select(self, node: Node) -> int:
-        """Calculate action number of the given node's child node to visit  
-        using PUCT algorithm.
-            
-        Note:
-            This method overrides `select()` of `NodeVisitor`. 
-        """
-        
-    def modify_priors(self, ps: tf.Tensor) -> tf.Tensor:
-        """Modify the given priors by adding Dirichlet noise.
-        
-        Note:
-            This method overrides `modify_priors()` of `NodeVisitor`.        
-        """
-    
-    def reset(self) -> None:
-        """Reset states of this instance.
-        
-        This method does nothing since there are no states in this instance.
-        
-        Note:
-            Override `reset()` of `NodeVisitor`."""
-        pass
