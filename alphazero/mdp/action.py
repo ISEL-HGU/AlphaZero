@@ -7,7 +7,8 @@ class Action():
 
     Note:
         Descendants of `Action` should override `to_arr()` if `Model` uses  
-        dynamics network. Overriding `__str__()` can modify debugging message.
+        dynamics network, and call `__init__()` of `Action` in  the  
+        constructor. Overriding `__str__()` can modify debugging message.
     
     Attributes:
         _val (int): Action number.
