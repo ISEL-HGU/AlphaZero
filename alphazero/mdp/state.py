@@ -10,16 +10,16 @@ class Observation():
         `__init__()` of `Observation` in the constructor.
     
     Attributes:
-        _val (tf.Tensor): Observation representation.
+        _repr (tf.Tensor): Observation representation.
     """
 
-    def __init__(self, val: tf.Tensor):
+    def __init__(self, repr: tf.Tensor):
         """Initialize `Observation` instance.
 
         Args:
             val (tf.Tensor): Observation representation.
         """
-        self._val = val
+        self._repr = repr
 
     def is_terminal(self) -> bool:
         """Check whether this instance represents terminal observation or not.
@@ -34,8 +34,8 @@ class Observation():
         raise NotImplementedError(f'class {self.__class__} did not override \
                                   is_terminal().')
     
-    def get_val(self) -> tf.Tensor:
-        return self._val
+    def get_repr(self) -> tf.Tensor:
+        return self._repr
         
 class State():
     """Base state class.  
@@ -44,16 +44,16 @@ class State():
         Descendants of `State` should override `is_terminal()`.
     
     Attributes:
-        _val (tf.Tensor): State representation.
+        _repr (tf.Tensor): State representation.
     """
     
-    def __init__(self, val: tf.Tensor):
+    def __init__(self, repr: tf.Tensor):
         """Initialize `State` instance.
 
         Args:
             val (tf.Tensor): State representation.
         """
-        self._val = val
+        self._repr = repr
     
     def is_terminal(self) -> bool:
         """Check whether this instance represents terminal state or not.
@@ -65,5 +65,5 @@ class State():
         raise NotImplementedError(f'class {self.__class__} did not override \
                                   is_terminal().')
     
-    def get_val(self) -> tf.Tensor:
-        return self._val
+    def get_repr(self) -> tf.Tensor:
+        return self._repr
