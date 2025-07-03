@@ -11,16 +11,16 @@ class Action():
         constructor. Overriding `__str__()` can modify debugging message.
     
     Attributes:
-        _val (int): Action number.
+        _num (int): Action number.
     """
     
-    def __init__(self, val: int):
+    def __init__(self, num: int):
         """Initialize `Action` instance.
         
         Args:
-            val (int): Action number.
+            num (int): Action number.
         """    
-        self._val = val
+        self._num = num
     
     def to_arr(self) -> tf.Tensor:
         """Convert this instance into an array representation.
@@ -36,5 +36,5 @@ class Action():
         raise NotImplementedError(f'class {self.__class__} did not override \
                                   to_arr().')
         
-    def get_val(self) -> int:
-        return self._val
+    def get_num(self) -> int:
+        return self._num
