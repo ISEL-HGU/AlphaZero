@@ -19,5 +19,8 @@ class Reward():
         """
         self._val = val
     
-    def get_val(self) -> float:
-        return self._val
+    def __add__(self, other):
+        return self._val + other
+
+    def __str__(self):
+        return str(self._val)
