@@ -258,20 +258,23 @@ class Node():
         return self._s is not None
     
     def get_child(self, i: int) -> 'Node':
-        """Get `i`th child node of this instance.
-
+        """Get the child node of given index.
+        
         Args:
-            i (int): The index of the child node.
+            i (int): The index.
     
         Returns:
             Node: The child node.
             
         Raises:
-            NodeException: If this instnace is not expanded.
+            NodeException: If this instance is not expanded or terminal.
             IndexError: If the index is out of range.
         """
         if not self._is_expanded():
             raise NodeException(self.get_child.__qualname__, 'expanded')
+        
+        if self.is_terminal():
+            raise NodeException(self.get_child.__qualname__, 'non terminal')
         
         if i < 0 or i >= len(self._children):
             raise IndexError(f'can only get 0th to {len(self._children) - 1}th \
