@@ -15,29 +15,29 @@ class MDPFactory():
         `create_state()`, `create_action()` and `create_reward()`.
     """
 
-    def create_observation(self, repr: tf.Tensor) -> Observation:
+    def create_observation(self, *args) -> Observation:
         """Create `Observation` instance.
 
         Args:
-            repr (tf.Tensor): Observation representation.
+            *args: Arguments for creating `Observation` instance.
         
         Returns:
             Observation: The `Observation` instance.
         """
-        raise NotImplementedError(f'class {self.__class__} did not override \
-                                  create_observation().')
+        raise NotImplementedError(f'class {self.__class__} did not override '
+                                   'create_observation().')
 
-    def create_state(self, repr: tf.Tensor) -> State:
+    def create_state(self, *args) -> State:
         """Create `State` instance.
 
         Args:
-            repr (tf.Tensor): State representation.
-            
+            *args: Arguments for creating `State` instance.
+        
         Returns:
             State: The `State` instance.
         """
-        raise NotImplementedError(f'class {self.__class__} did not override \
-                                  create_state().')
+        raise NotImplementedError(f'class {self.__class__} did not override '
+                                   'create_state().')
         
     def create_action(self, num: int) -> Action:
         """Create `Action` instance.
@@ -48,8 +48,8 @@ class MDPFactory():
         Returns:
             Action: The `Action` instance.
         """
-        raise NotImplementedError(f'class {self.__class__} did not override \
-                                  create_action().')
+        raise NotImplementedError(f'class {self.__class__} did not override '
+                                   'create_action().')
     
     def create_reward(self, *args) -> Reward:
         """Create `Reward` instance.
@@ -60,5 +60,5 @@ class MDPFactory():
         Returns:
             Reward: The `Reward` instance.
         """
-        raise NotImplementedError(f'class {self.__class__} did not override \
-                                  create_reward().')
+        raise NotImplementedError(f'class {self.__class__} did not override '
+                                   'create_reward().')
