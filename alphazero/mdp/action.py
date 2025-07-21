@@ -6,7 +6,7 @@ class Action():
     """Base action class.
 
     Note:
-        Descendants of `Action` should override `to_arr()` if `Model` uses  
+        Descendants of `Action` should override `to_repr()` if `Model` uses  
         dynamics network, and call `__init__()` of `Action` in  the  
         constructor. Overriding `__str__()` can modify debugging message.
     
@@ -22,19 +22,19 @@ class Action():
         """    
         self._num = num
     
-    def to_arr(self) -> tf.Tensor:
-        """Convert this instance into an array representation.
+    def to_repr(self) -> tf.Tensor:
+        """Convert this instance into the action representation.
 
         Note:
-            This method is intended to be called in dynamics network only. If  
-            simulator is used as dynamics of `Model`, this method should not  
-            be called.  
+            This method is intended to be called only when the `Model` uses  
+            dynamics network. If simulator is used for dynamics of `Model`,  
+            this method should not be called.  
         
         Returns:
-            tf.Tensor: The array representation.
+            tf.Tensor: The action representation.
         """ 
-        raise NotImplementedError(f'class {self.__class__} did not override \
-                                  to_arr().')
+        raise NotImplementedError(f'class {self.__class__} did not override' 
+                                   'to_repr().')
         
     def get_num(self) -> int:
         return self._num
