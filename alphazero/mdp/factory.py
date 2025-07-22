@@ -11,15 +11,21 @@ class MDPFactory():
     `Reward` instances.
 
     Note:
-        Descendants of `MDPFactory` should override `create_observation`,  
+        Descendants of `MDPFactory` should override `create_observation()`,  
         `create_state()`, `create_action()` and `create_reward()`.
     """
 
-    def create_observation(self, *args) -> Observation:
+    def create_observation(self, *args, start: bool=False) -> Observation:
         """Create `Observation` instance.
+
+        Note:
+            This method should create start `Observation` instance if given  
+            start flag is `True`, normal `Observation` instance otherwise.  
 
         Args:
             *args: Arguments for creating `Observation` instance.
+            start (bool): Flag that indicates whether to create start  
+                observation or not. Defaults to `False`.
         
         Returns:
             Observation: The `Observation` instance.
