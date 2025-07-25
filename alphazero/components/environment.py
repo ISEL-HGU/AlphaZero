@@ -1,4 +1,4 @@
-"""Environment."""
+"""Environment interface."""
 
 from alphazero.mdp.action import Action
 from alphazero.mdp.factory import MDPFactory
@@ -9,9 +9,8 @@ class Environment():
     """Environment that outputs reward and observation.
 
     Note:
-        Descendants of `Environment` should override `obtain_init_o_args()`  
-        and `induce()`. They should also call `__init__()` of `Environment` in  
-        the constructor.
+        Descendants of `Environment` should override `induce()`. They should  
+        also call `__init__()` of `Environment` in the constructor.
     
     Attributes:
         _r (Reward): Current reward.
@@ -30,19 +29,10 @@ class Environment():
                 step.
         """
         self._r = None
-        self._o = factory.create_observation(*self.obtain_init_o_args())
+        self._o = factory.create_observation(start=True)
         self._t = 0
         self._factory = factory
         self._t_limit = t_limit
-        
-    def obtain_init_o_args(self) -> tuple:
-        """Obtain initial observation arguments.
-
-        Returns:
-            tuple: The arguments of initial observation.
-        """
-        raise NotImplementedError(f'class {self.__class__} did not override' 
-                                   'obtain_init_o_args().')
         
     def apply(self, a: Action) -> None: 
         """Apply given action to the observation of this instance.
@@ -62,7 +52,7 @@ class Environment():
         observation and action.
 
         Args:
-            o (Observation): The currrent observation.
+            o (Observation): The current observation.
             a (Action): The action.
 
         Returns:
@@ -75,7 +65,7 @@ class Environment():
         """Reset this instance.
         """
         self._r = None
-        self._o = self._factory.create_observation(*self.obtain_init_o_args())
+        self._o = self._factory.create_observation(start=True)
         self._t = 0
         
     def is_terminated(self) -> bool:
