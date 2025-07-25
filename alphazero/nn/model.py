@@ -1,12 +1,13 @@
 """Neural networks model."""
 
+import keras
 import tensorflow as tf
 
-from alphazero.alphazero import BaseAlphaZero
 from alphazero.mdp.action import Action
+from alphazero.mdp.factory import MDPFactory
 from alphazero.mdp.reward import Reward
 from alphazero.mdp.state import Observation, State
-from alphazero.stepables.simulator import Simulator
+from alphazero.components.simulator import Simulator
 
 
 class Model(tf.keras.Model):
@@ -17,24 +18,43 @@ class Model(tf.keras.Model):
         _repr_net (tf.keras.layers.Layer): Representation network.
         _pred_net (tf.keras.layers.Layer): Prediction network.
         _dynamics (Simulator or tf.keras.layers.Layer): Dynamics.
+        _factory (MDPFactory): MDP factory
     """
     
     def __init__(self, repr_net: tf.keras.layers.Layer, 
                  pred_net: tf.keras.layers.Layer, 
-                 dynamics: 'Simulator | tf.keras.layers.Layer'):
+                 dynamics: tf.keras.layers.Layer | Simulator,
+                 factory: MDPFactory, 
+                 **kwargs):
         """Initialize `Model` instance.
 
         Args:
             repr_net (tf.keras.layers.Layer): Representation network.
             pred_net (tf.keras.layers.Layer): Prediction network.
             dynamics (Simulator or tf.keras.layers.Layer): Dynamics.
+            factory (MDPFactory): MDP factory
+            **kwargs: Keyword arguments for initializing this instance.
         """
-        super(Model, self).__init__()
+        super(Model, self).__init__(**kwargs)
         
         self._repr_net = repr_net
         self._pred_net = pred_net
         self._dynamics = dynamics
+        self._factory = factory
     
+    @classmethod
+    def from_config(cls, config):
+        config['repr_net'] = keras.saving.deserialize_keras_object(
+                config['repr_net'])
+        config['pred_net'] = keras.saving.deserialize_keras_object(
+                config['pred_net'])
+        config['dynamics'] = keras.saving.deserialize_keras_object(
+                config['dynamics'])
+        config['factory'] = keras.saving.deserialize_keras_object(
+                config['factory'])
+        
+        return cls(**config)
+        
     def encode(self, o: Observation) -> State:
         """Encode given observation into state.
 
@@ -44,10 +64,10 @@ class Model(tf.keras.Model):
         Returns:
             State: The state.
         """
-        return BaseAlphaZero.factory.create_state(self._repr_net(o.get_repr()))
+        return self._factory.create_state(self._repr_net(o.get_repr()))
         
-    def estimate(self, s: State) -> 'tuple[tf.Tensor, float]':
-        """Estimates prior probabilities over actions and value of given state.
+    def estimate(self, s: State) -> tuple[tf.Tensor, float]:
+        """Estimate prior probabilities over actions and value of given state.
 
         Args:
             s (State): The state.
@@ -57,7 +77,7 @@ class Model(tf.keras.Model):
         """
         return self._pred_net(s.get_repr())
 
-    def process(self, s: State, a: Action) -> 'tuple[Reward, State]':
+    def process(self, s: State, a: Action) -> tuple[Reward, State]:
         """Process to the next state by taking given action on given state.
 
         Args:
@@ -67,17 +87,31 @@ class Model(tf.keras.Model):
         Returns:
             tuple: Immediate reward and next state.
         """
-        r_args, s_repr = self._dynamics([s.get_repr(), a.to_repr()])
+        if isinstance(self._dynamics, Simulator):
+            return self._dynamics.simulate(s, a)
+        else: 
+            r_args, s_repr = self._dynamics([s.get_repr(), a.to_repr()])
         
-        return (BaseAlphaZero.factory.create_reward(r_args), 
-                BaseAlphaZero.factory.create_state(s_repr))
+            return (self._factory.create_reward(r_args), 
+                    self._factory.create_state(s_repr))
     
-    def call(self, inputs, training, mask):
+    def call(self, inputs, training=None, mask=None):
         o_repr, a_repr = inputs
         
         s_repr = self._repr_net(o_repr)
         
-        return (self._pred_net(s_repr), self._dynamics([s_repr, a_repr]))
+        if isinstance(self._dynamics, Simulator):
+            return self._pred_net(s_repr)
+        else: 
+            return self._pred_net(s_repr) + self._dynamics([s_repr, a_repr])
+
+    def get_config(self):
+        return {**super(Model, self).get_config(), 'repr_net': self._repr_net,
+                'pred_net': self._pred_net, 'dynamics': self._dynamics,
+                'factory': self._factory}
+    
+    def get_factory(self) -> MDPFactory:
+        return self._factory
 
 
 class AlphaZeroModel(tf.keras.Model):
