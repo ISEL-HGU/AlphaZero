@@ -3,8 +3,8 @@
 import keras
 import tensorflow as tf
 
+from alphazero import mdp
 from alphazero.mdp.action import Action
-from alphazero.mdp.factory import MDPFactory
 from alphazero.mdp.reward import Reward
 from alphazero.mdp.state import Observation, State
 from alphazero.components.simulator import Simulator
@@ -18,13 +18,11 @@ class Model(tf.keras.Model):
         _repr_net (tf.keras.layers.Layer): Representation network.
         _pred_net (tf.keras.layers.Layer): Prediction network.
         _dynamics (Simulator or tf.keras.layers.Layer): Dynamics.
-        _factory (MDPFactory): MDP factory
     """
     
     def __init__(self, repr_net: tf.keras.layers.Layer, 
                  pred_net: tf.keras.layers.Layer, 
                  dynamics: tf.keras.layers.Layer | Simulator,
-                 factory: MDPFactory, 
                  **kwargs):
         """Initialize `Model` instance.
 
@@ -32,7 +30,6 @@ class Model(tf.keras.Model):
             repr_net (tf.keras.layers.Layer): Representation network.
             pred_net (tf.keras.layers.Layer): Prediction network.
             dynamics (Simulator or tf.keras.layers.Layer): Dynamics.
-            factory (MDPFactory): MDP factory
             **kwargs: Keyword arguments for initializing this instance.
         """
         super(Model, self).__init__(**kwargs)
@@ -40,7 +37,7 @@ class Model(tf.keras.Model):
         self._repr_net = repr_net
         self._pred_net = pred_net
         self._dynamics = dynamics
-        self._factory = factory
+
     
     @classmethod
     def from_config(cls, config):
@@ -50,8 +47,6 @@ class Model(tf.keras.Model):
                 config['pred_net'])
         config['dynamics'] = keras.saving.deserialize_keras_object(
                 config['dynamics'])
-        config['factory'] = keras.saving.deserialize_keras_object(
-                config['factory'])
         
         return cls(**config)
         
@@ -64,7 +59,7 @@ class Model(tf.keras.Model):
         Returns:
             State: The state.
         """
-        return self._factory.create_state(self._repr_net(o.get_repr()))
+        return mdp.factory.create_state(self._repr_net(o.get_repr()))
         
     def estimate(self, s: State) -> tuple[tf.Tensor, float]:
         """Estimate prior probabilities over actions and value of given state.
@@ -92,8 +87,8 @@ class Model(tf.keras.Model):
         else: 
             r_args, s_repr = self._dynamics([s.get_repr(), a.to_repr()])
         
-            return (self._factory.create_reward(r_args), 
-                    self._factory.create_state(s_repr))
+            return (mdp.factory.create_reward(r_args), 
+                    mdp.factory.create_state(s_repr))
     
     def call(self, inputs, training=None, mask=None):
         o_repr, a_repr = inputs
@@ -107,11 +102,7 @@ class Model(tf.keras.Model):
 
     def get_config(self):
         return {**super(Model, self).get_config(), 'repr_net': self._repr_net,
-                'pred_net': self._pred_net, 'dynamics': self._dynamics,
-                'factory': self._factory}
-    
-    def get_factory(self) -> MDPFactory:
-        return self._factory
+                'pred_net': self._pred_net, 'dynamics': self._dynamics}
 
 
 class AlphaZeroModel(tf.keras.Model):
