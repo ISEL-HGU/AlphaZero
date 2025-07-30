@@ -51,12 +51,16 @@ class ReplayBuffer():
             j = tf.random.uniform([], maxval=len(self._histories[i]), 
                                   dtype=tf.int32) \
                          .numpy()
-            observations.append(self._histories[i][j]['o'].get_repr())
-            actions.append(self._histories[i][j]['a'].to_repr())
+            
+            observations.append(self._histories[i][j]['o'])
+            actions.append(self._histories[i][j]['a'])
             policies.append(self._histories[i][j]['pi'])
             state_values.append(tf.constant(self._histories[i][j]['z']))
-            rewards.append(tf.constant(self._histories[i][j]['u'].get_val()))
+            rewards.append(tf.constant(self._histories[i][j]['u']))
         
         return ([tf.stack(observations), tf.stack(actions)], 
                 [tf.stack(policies), tf.stack(state_values), 
                  tf.stack(rewards)])
+
+    def __len__(self):
+        return len(self._histories)
