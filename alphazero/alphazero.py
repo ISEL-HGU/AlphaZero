@@ -3,59 +3,62 @@
 from threading import Thread
 
 import keras
-import tensorflow as tf
 
+from alphazero import mdp
 from alphazero.components.agent import Agent
 from alphazero.components.environment import Environment
 from alphazero.improvements.policy_improvements import PVCD
 from alphazero.improvements.value_estimations.simulation_value_estimations \
         import SoftZ
-from alphazero.improvements.value_estimations.trajectory_value_estimations import FinalOutcome
+from alphazero.improvements.value_estimations.trajectory_value_estimations \
+        import FinalOutcome
 from alphazero.mdp.factory import MDPFactory
 from alphazero.nn.model import Model
-from alphazero.tree.visitor import BoundedVisitor, NodeVisitor, PUCTSelector
+from alphazero.tree.visitor import PUCTVisitor
 from alphazero.utils.replaybuffer import ReplayBuffer
 
 
 class BaseAlphaZero():
-    """Base AlphaZero class where training and inference logic alives.
+    """Base AlphaZero class where training and inference logic alive.
 
     Note:
-        - Descendants of this class that overrides `__init__()` should call  
-          `BaseAlphaZero.__init__()` in its `__init__()`.
-        - Direct descendants of this class should override `create_agent()`.
+        - Descendants of this class should call `BaseAlphaZero.__init__()` in
+          their `__init__()`.
+        - Descendants of this class should override `_create_agent()`.
 
     Attributes:
         _model (Model): Latest neural networks model.
         _replay_buffer (ReplayBuffer): Replay buffer.
         _training_step (int): Current training step.
-        _done_training (bool): Flag that indicates whether training is done  
-            or not.
+        _done_training (bool): Flag of training status.
+        _is_mulitagent (bool): Flag of multi-agent problem setting.
     """
        
-    def __init__(self, factory_cls: type, model: Model | str,  
-                 capacity: int, is_multiagent: bool):
+    def __init__(self, model: Model | str, factory: MDPFactory,  
+                 capacity: int, is_multiagent: bool, name: str):
         """Initialize `BaseAlphaZero` instance.
 
         Args:
-            factory_cls (type): MDP factory class.
             model (Model or str): Neural networks model or file name of a  
                 saved model.
+            factory (MDPFactory): MDP Factory.
             capacity (int): Capacity of replay buffer.
-            is_multiagent (bool): Value that indicates whether the problem is  
-                multiagent or not.
+            is_multiagent (bool): Flag that indicates whether the problem is  
+                in multi-agent setting or not.
+            name (str): The name of the algorithm.
         """ 
+        mdp.factory = factory
+    
         keras.saving.register_keras_serializable('az.nn', 'Model')(Model)
-        keras.saving.register_keras_serializable()(factory_cls)
-                   
+        
         self._model = model if isinstance(model, Model) \
                             else keras.models.load_model(model)
         self._replay_buffer = ReplayBuffer(capacity)
         self._training_step = 1
         self._done_training = False
-        
-        NodeVisitor.set_is_multiagent(is_multiagent)
-        
+        self._is_multiagent = is_multiagent
+        self._name = name
+    
     def train(self, actors: int, train_steps: int, epochs: int, 
               batch_size: int, mini_batch_size: int, save_steps: int, 
               simulations: int, preserve: bool) -> None:
@@ -97,21 +100,25 @@ class BaseAlphaZero():
             preserve (bool): Flag that indicates preserving tree statistics  
                 after an action.
         """
-        env = self.create_env(self._model.get_factory())
-        agent = self.create_agent(self._model)
+        env = self._create_env()
+        agent = self._create_agent(self._model, self._is_multiagent)
         
         while not self._done_training:
-            while not env.is_terminated():
-                env.apply(agent.act(env.get_o(), simulations, preserve))
-                agent.add_r(env.get_r())
-            
+            while True:
+                a = agent.act(env.get_r(), env.get_o(), simulations, preserve)
+                
+                if env.is_terminated():
+                    break
+                
+                env.apply(a)
+                
             self._replay_buffer.add_history(agent.obtain_history())
             
             env.reset()
             agent.reset()
             agent.update(self._model, self._training_step)
     
-    def create_env(self, factory: MDPFactory) -> Environment:
+    def _create_env(self) -> Environment:
         """Create an appropriate `Environment` instance using given MDP  
         factory.
 
@@ -121,24 +128,26 @@ class BaseAlphaZero():
         Returns:
             Environment: The `Environment` instance.
         """
-        raise NotImplementedError(f'class {self.__class__} did not override'
-                                   'create_env().')
+        raise NotImplementedError(f'class {self.__class__} did not override '
+                                   '_create_env().')
     
-    def create_agent(self, model: Model) -> Agent:
+    def _create_agent(self, model: Model, is_multiagent: bool) -> Agent:
         """Create an appropriate `Agent` instance using given neural networks  
         model.
 
         Args:
             model (Model): The neural networks model.
+            is_multiagent (bool): Flag that indicates whether the agent to be  
+                created is multi-agent or not.
 
         Returns:
             Agent: The `Agent` instance.
         """
-        raise NotImplementedError(f'class {self.__class__} did not override' 
-                                   'create_agent().')
+        raise NotImplementedError(f'class {self.__class__} did not override '
+                                   '_create_agent().')
 
     def _train_model(self, train_steps: int, epochs: int, batch_size: int,
-                      mini_batch_size: int, save_steps: int) -> None:
+                     mini_batch_size: int, save_steps: int) -> None:
         """Train the neural networks model of this instance.
 
         Args:
@@ -148,9 +157,12 @@ class BaseAlphaZero():
             mini_batch_size (int): Mini-batch size.  
             save_steps (int): The number of steps for saving trained model.
         """
+        while len(self._replay_buffer) < batch_size:
+            pass
+        
         while self._training_step <= train_steps:
             model = keras.models.clone_model(self._model)
-            model.save_weights(self._model.get_weights())
+            model.set_weights(self._model.get_weights())
             
             x, y = self._replay_buffer.sample(batch_size)
             model.fit(x, y, batch_size=mini_batch_size, epochs=epochs)
@@ -176,8 +188,8 @@ class AlphaZero(BaseAlphaZero):
     """AlphaZero algorithm.
 
     Note:
-        - Descendants of this class that overrides `__init__()` should call  
-          `AlphaZero.__init__()` in its `__init__()`.
+        - Descendants of this class should call `AlphaZero.__init__()` in its
+          `__init__()`.
     
     Attributes:
         _concentration (float): Concentration parameter.
@@ -190,50 +202,49 @@ class AlphaZero(BaseAlphaZero):
         ```python
         class MyAlphaZero(AlphaZero):
             
-            def create_env(self, factory):
-                return MyEnvironment(factory)
+            def create_env(self):
+                return MyEnvironment()
         
         #instantiates your AlphaZero.
-        az = MyAlphaZero(...)
+        my_az = MyAlphaZero(...)
         
         #training.
-        az.train(...)
+        my_az.train(...)
         
         #inference.
-        az.infer(...)
+        my_az.infer(...)
         ```
     """
     
-    def __init__(self, factory_cls: type, model: Model | str, 
+    def __init__(self, model: Model | str, factory: MDPFactory, 
                  capacity: int, concentration: float, 
                  noise_weight: float, is_multiagent: bool):
         """Initialize `AlphaZero` instance.
         
         Args:
-            factory_cls (type): MDP factory class.
             model (Model or str): Neural networks model or file name of a  
                 saved model.
+            factory (MDPFactory): MDP factory.
             capacity (int): Capacity of replay buffer.
             concentration: Concentration parameter of Dirichlet distribution.
             noise_weight: Dirichlet noise weight.
             is_multiagent (bool): Value that indicates whether the problem is  
                 multiagent or not.
         """
-        super(AlphaZero, self).__init__(factory_cls, model, 
-                                        capacity, is_multiagent)
+        super(AlphaZero, self).__init__(model, factory, capacity, 
+                                        is_multiagent, 'AlphaZero')
        
         self._concentration = concentration
         self._noise_weight = noise_weight
         
-    def create_agent(self, model: Model) -> Agent:
+    def _create_agent(self, model: Model, is_multiagent: bool) -> Agent:
         """Create AlphaZero agent.
 
         Note: 
-            - This method overrides `BaseAlphaZero.create_agent()`.
+            - This method overrides `BaseAlphaZero._create_agent()`.
         """
-        return Agent(BoundedVisitor(model, 
-                                    PUCTSelector(self._concentration, 
-                                                 self._noise_weight)),
+        return Agent(PUCTVisitor(model, self._concentration, 
+                                 self._noise_weight, is_multiagent),
                      PVCD(),
                      SoftZ(),
                      FinalOutcome())
