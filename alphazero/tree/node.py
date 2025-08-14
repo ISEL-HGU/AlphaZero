@@ -2,22 +2,19 @@
 
 import tensorflow as tf
 
-from alphazero.algorithms.policy_improvements.policy_improvement \
-        import PolicyImprovement
-from alphazero.algorithms.value_estimation.tree.tree_value_estimation \
-        import TreeValueEstimation
-from alphazero.exceptions.node_exception import NodeException
+from alphazero.improvements.policy_improvements import PolicyImprovement
+from alphazero.improvements.value_estimations.simulation_value_estimations \
+        import SimulationValueEstimation
+from alphazero.exceptions.node_exception import NodeException, NodeExceptionCode
 from alphazero.mdp.action import Action 
 from alphazero.mdp.reward import Reward
 from alphazero.mdp.state import Observation, State 
-from alphazero.tree.visitor import NodeVisitor
-
 
 class Node():
     """Tree node that conducts Monte-Carlo Tree Search (MCTS).  
 
     Each node is represented by internal state `s` and action `a`. Each node  
-    stores set of statistics `{R(s,a), S(s,a), P(s,a), Q(s,a), N(s,a)}`, where  
+    stores set of statistics `{R(s,a), S(s,a), P(s,a), Q(s,a), N(s,a)}`, where
     - `R(s,a)` is intermediate reward.
     - `S(s,a)` is state transition.
     - `P(s,a)` is prior probability.
@@ -25,13 +22,14 @@ class Node():
     - `N(s,a)` is visit count. 
     
     The node is classified as following:
-    - Root node: Node that is located at the top of the search tree.
-    - Expanded node: Node that is visited at least once.
-    - Unexpanded node: Node that is not visited yet.
-    - Terminal node: Leaf node whose state transition is a terminal state.  
-        Terminal node belongs to expanded node. Terminal state can be both  
-        legal and illegal.
-    
+    - **Root node**: Node that is located at the top of the search tree.
+    - **Expanded node**: Node that has children.
+    - **Unexpanded node**: Node that does not have children.
+    - **Terminal node**: Unexpanded node whose state transition is terminal  
+      state.
+    - **Undetermined node**: Unexpanded node that does not have state  
+      transition yet.
+
     Attributes:
         _intern_s (State): The internal state.
         _a (Action): The action. 
@@ -43,19 +41,18 @@ class Node():
         _n (int): The visit count.
         _children (list of Node): Children nodes.
         _pi (PolicyImprovementStrategy): Policy improvement algorithm.
-        _tve (TreeValueEstimation): Tree demension value estimation algorithm.
-        _discount_factor(float): Discount factor.
+        _sve (SimulationValueEstimation): Simulation value  estimation  
+            algorithm.
     """
-   
-    def __init__(self, intern_s: 'State | None', a: 'Action | None', 
-                 p: 'float | None', discount_factor: float):
+
+    def __init__(self, intern_s: State | None, a: Action | None, 
+                 p: float | None):
         """ Initialize `Node` instance.
         
         Args:
             intern_s (State): Internal state.
             a (Action): Action.
             p (float): Prior probability.
-            discount_factor (float): Discount factor.
         """
         self._intern_s = intern_s
         self._a = a
@@ -65,34 +62,32 @@ class Node():
         self._p = p
         self._q = 0
         self._n = 0
-        self._children = None
+        self._children = []
         self._pi = None
-        self._tve = None
-        self._discount_factor = discount_factor
+        self._sve = None
     
     @classmethod
-    def root(cls, pi: PolicyImprovement, tve: TreeValueEstimation, 
-             discount_factor: float) -> 'Node':
+    def root(cls, pi: PolicyImprovement, sve: SimulationValueEstimation) \
+            -> 'Node':
         """Create root `Node` instance.
         
         Args:
             pi (PolicyImprovement): Policy improvement algorithm.
-            tve (TreeValueEstimation): Tree demension value estimation  
-                algorithm.
-            discount_factor: Discount factor.
+            tve (SimulationValueEstimation): Simulation demension value  
+                estimation algorithm.
             
         Returns:
             Node: The root `Node` instance.
         """
-        node = cls(None, None, None, discount_factor)
+        node = cls(None, None, None)
         node._pi = pi
-        node._tve = tve
+        node._sve = sve
         
         return node
     
-    def mcts(self, o: Observation, simulations: int, visitor: NodeVisitor) \
-            -> 'tuple[tf.Tensor, float]':
-        """Conduct monte-carlo tree search for the given number of simulations. 
+    def mcts(self, o: Observation, simulations: int, visitor) \
+            -> tuple[tf.Tensor, float]:
+        """Conduct Monte-Carlo Tree Search for the given number of simulations.
 
         Args:
             o (Observation): Observation of this instance.
@@ -103,32 +98,40 @@ class Node():
             tuple: Improved policy and value estimate.
         
         Raises: 
-            NodeException: If this instance is non root.
+            NodeException: If this instance is non-root.
         """
         if not self.is_root():
-            raise NodeException(self.mcts.__qualname__, 'root') 
-
-        self._o = o
+            raise NodeException(self.mcts.__qualname__, 
+                                NodeExceptionCode.NONROOT)
         
-        for _ in range(simulations if self._is_expanded() else simulations + 1):
+        if not self.is_expanded():
+            self._o = o
+        
+        for _ in range(simulations if self.is_expanded() else simulations + 1):
             self._accept(visitor)
         
-        return (self._pi.improve(self), self._tve.estimate(self))
-    
-    def _accept(self, visitor: NodeVisitor) -> float:
-        """Accept visitor to this instance.
+        return (self._pi(self), self._sve(self))
+        
+    def _accept(self, visitor) -> float:
+        """Accept a node visitor to this instance.
 
-        The visitor selects child nodes until it visits leaf node. Then it  
-        expands and evaluates the leaf node. Finally, it backups statistics of  
-        all the visited nodes from leaf to root.
-
+        The operation is to conduct one simulation of MCTS. The visitor  
+        conducts pre visit internal operation when it reaches an expanded  
+        node. The pre visit internal operation returns the index of child  
+        node to visit. The visitor then moves to the child node and condcuts  
+        the same process until it reaches the unexpanded node. When the  
+        visitor reaches unexpanded node, it conducts vist leaf opearation.  
+        After the operation, it moves back to the visited parent node and  
+        conducts post visit internal operation. The visitor conducts the same  
+        process until it reaches the root node.
+           
         Args:
             visitor (NodeVisitor): The visitor.
 
         Returns:
             float: State-action value of this instance.
         """
-        if not self._is_expanded() or self.is_terminal():
+        if not self.is_expanded():
             return visitor.visit_leaf(self)
 
         return visitor.post_visit_internal(
@@ -136,8 +139,8 @@ class Node():
                 self._children[visitor.pre_visit_internal(self)]
                     ._accept(visitor))
     
-    def make_root(self, pi: PolicyImprovement, tve: TreeValueEstimation) \
-            -> None:
+    def make_root(self, pi: PolicyImprovement, 
+                  sve: SimulationValueEstimation) -> None:
         """Make this instance into root node.
 
         See also:
@@ -145,11 +148,11 @@ class Node():
         
         Args:
             pi (PolicyImprovement): Policy improvement algorithm.
-            tve (TreeValueEstimation): Tree demension value estimation  
-                algorithm.
+            sve (SimulationValueEstimation): Simulation demension value  
+                estimation algorithm.
         """
         self._pi = pi
-        self._tve = tve
+        self._sve = sve
     
     def add_child(self, child: 'Node') -> None:
         """Add given child node to this instance.
@@ -157,55 +160,50 @@ class Node():
         Args:
             child (Node): The child node.
         """
-        if not self._children:
-            self._children = []
-        
         self._children.append(child)
 
     def update_stats(self, v: float) -> float:
         """Update statistics of this instance with the given state value.
         
         Args:
-            v (float): The state value.
+            v (float): The state value of the state transition of this  
+                instance.
         
         Returns:
-            float: The state value if this instance is root, cumulative  
-                reward otherwise. 
+            float: The state value if this instance is root, calculated  
+                state-action value otherwise. 
         
-        Raises: 
-            NodeException: If this intance is not expanded.
+        Raises:
+            NodeException: If this intance is undetermined.
         """
-        if not self._is_expanded():
-            raise NodeException(self.update_stats.__qualname__, 'expanded')
+        if not self.is_expanded() and not self.is_terminal():
+            raise NodeException(self.update_stats.__qualname__, 
+                                NodeExceptionCode.UNDETERMINED)
         
         if self.is_root():
             self._n += 1
             
             return v
-        else: 
-            g = self._r + self._discount_factor * v
+        else:    
+            g = self._r + self._r.get_discount_factor() * v
             
             self._n += 1
             self._q = self._q + (g - self._q) / self._n
             
             return g
     
-    def obtain_stats_children(self) -> 'dict[str, tf.Tensor]':
+    def obtain_stats_children(self) -> dict:
         """Obtain statistics of children.
         
         Returns:
             dict: The statistics.
         
         Raises:
-            NodeException: If this instance is not expanded or terminal.
+            NodeException: If this instance is not expanded.
         """
-        if not self._is_expanded():
+        if not self.is_expanded():
             raise NodeException(self.obtain_stats_children.__qualname__, 
-                                'expanded')
-        
-        if self.is_terminal():
-            raise NodeException(self.obtain_stats_children.__qualname__, 
-                                'non terminal')
+                                NodeExceptionCode.UNEXPANDED)
         
         P = []
         Q = []
@@ -229,9 +227,9 @@ class Node():
         self._p = None
         self._q = 0
         self._n = 0
-        self._children = None
+        self._children = []
         self._pi = None
-        self._tve = None
+        self._sve = None
         
     def is_root(self) -> bool:
         """Check whether this instance is root or not.
@@ -239,7 +237,17 @@ class Node():
         Returns:
             bool: `True` if this instance is root, `False` otherwise.
         """
-        return self._pi is not None and self._tve is not None
+        return self._pi is not None and self._sve is not None
+    
+    def is_expanded(self) -> bool:
+        """Check whether this instance is expanded or not.
+        
+        Returns:
+            bool: `True` if this instance is expanded, `False` otherwise.
+        """ 
+        return (self.is_root() or isinstance(self._r, Reward)) \
+                and isinstance(self._s, State) \
+                and len(self._children) > 0
     
     def is_terminal(self) -> bool:
         """Check whether this instance is terminal or not.
@@ -247,15 +255,9 @@ class Node():
         Returns:
             bool: `True` if this instance is terminal, `False` otherwise.
         """
-        return self._is_expanded() and self._s.is_terminal()
-    
-    def _is_expanded(self) -> bool:
-        """Check whether this instance is expanded or not.
-        
-        Returns:
-            bool: `True` if this instance is expanded, `False` otherwise.
-        """ 
-        return self._s is not None
+        return self._r is not None \
+                and (self._s is None or self._s.is_terminal()) \
+                and len(self._children) == 0
     
     def get_child(self, i: int) -> 'Node':
         """Get the child node of given index.
@@ -266,36 +268,32 @@ class Node():
         Returns:
             Node: The child node.
             
-        Raises:
-            NodeException: If this instance is not expanded or terminal.
-            IndexError: If the index is out of range.
+        Raises: 
+            NodeException: If this instance is unexpanded.
+            IndexError: If the index is bigger than or equal to the number of  
+                children of this instance.
         """
-        if not self._is_expanded():
-            raise NodeException(self.get_child.__qualname__, 'expanded')
+        if not self.is_expanded():
+            raise NodeException(self.get_child.__qualname__, 
+                                NodeExceptionCode.UNEXPANDED)
         
-        if self.is_terminal():
-            raise NodeException(self.get_child.__qualname__, 'non terminal')
-        
-        if i < 0 or i >= len(self._children):
-            raise IndexError(f'can only get 0th to {len(self._children) - 1}th \
-                             child (not "{i}").')
-            
-        return self._children[i]
-
-    def get_intern_s(self) -> 'State | None':
+        try:
+            return self._children[i]
+        except IndexError:
+            raise IndexError(f'can only get 0th to {len(self._children) - 1}th' 
+                             f' (not "{i}") child')
+    
+    def get_intern_s(self) -> State | None:
         return self._intern_s
 
-    def get_a(self) -> 'Action | None':
+    def get_a(self) -> Action | None:
         return self._a
     
-    def get_o(self) -> 'Observation | None':
+    def get_o(self) -> Observation | None:
         return self._o
     
     def get_n(self) -> int:
         return self._n
-    
-    def get_discount_factor(self) -> float:
-        return self._discount_factor
     
     def set_r(self, r: Reward) -> None:
         self._r = r
