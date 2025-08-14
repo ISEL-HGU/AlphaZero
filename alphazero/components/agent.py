@@ -2,6 +2,7 @@
 
 import tensorflow as tf
 
+from alphazero import mdp
 from alphazero.improvements.policy_improvements import PolicyImprovement
 from alphazero.improvements.value_estimations.simulation_value_estimations \
         import SimulationValueEstimation
@@ -48,34 +49,44 @@ class Agent():
         self._sve = sve
         self._tve = tve
         
-    def act(self, o: Observation, simulations: int, preserve: bool) -> Action:
-        """Act an appropriate action on given observation.
+    def act(self, r: Reward | None, o: Observation | None, 
+            simulations: int, preserve: bool) -> Action | None:
+        """Act an appropriate action from given reward and observation.
 
-        The appropriate action is calculated by using MCTS.
+        The appropriate action is calculated by using MCTS (Monte-Carlo Tree  
+        Search).
         
         Args:
+            r (Reward): The reward.
             o (Observation): The observation.
-            simulations (int): The number of simulations for mcts.
+            simulations (int): The number of simulations for MCTS.
             preserve (bool): Flag that indicates whether to preserve the  
                 subtree or not.
         
         Returns:
             Action: The appropriate action.
         """
+        if r is not None:
+            self._history[-1]['u'] = r.get_val()
+        
+        if o is None or o.is_terminal(): 
+            return None
+        
         data = {}
         
-        data['o'] = o
+        data['o'] = o.get_repr()
         
         pi, v = self._root.mcts(o, simulations, self._visitor)
         data['pi'] = pi
         data['v'] = v
         
-        a = tf.random.categorical(tf.math.log(pi), 1).numpy()
-        data['a'] = a
+        a = mdp.factory.create_action(
+                tf.random.categorical(tf.math.log(pi), 1).numpy())
+        data['a'] = a.to_repr()
         
         self._history.append(data)
         
-        next_root = self._root.get_child(a) 
+        next_root = self._root.get_child(a.get_num()) 
         
         if not preserve:
             next_root.reset()
@@ -83,15 +94,7 @@ class Agent():
         next_root.make_root(self._pi, self._sve)
         self._root = next_root
         
-        return self._visitor.get_factory().create_action(a)
-
-    def add_r(self, r: Reward) -> None:
-        """Add the given reward to the history of this instance.
-
-        Args:
-            r (Reward): The reward.
-        """ 
-        self._history[-1]['u'] = r
+        return a
     
     def obtain_history(self) -> list[dict[str, object]]:
         """Obtain episode history of this instance.
@@ -126,4 +129,4 @@ class Agent():
         """
         self._history = []
         self._root = Node.root(self._pi, self._sve)
-        self._visitor.reset_selector()
+        self._visitor.reset()
