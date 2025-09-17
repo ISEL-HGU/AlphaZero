@@ -24,7 +24,8 @@ class BaseAlphaZero():
     Note:
         - Descendants of this class should call `BaseAlphaZero.__init__()` in
           their `__init__()`.
-        - Descendants of this class should override `_create_agent()`.
+        - Descendants of this class should override
+          `BaseAlphaZero._create_agent()`.
 
     Attributes:
         _model (Model): Latest neural networks model.
@@ -48,8 +49,6 @@ class BaseAlphaZero():
             name (str): The name of the algorithm.
         """ 
         mdp.factory = factory
-    
-        keras.saving.register_keras_serializable('az.nn', 'Model')(Model)
         
         self._model = model if isinstance(model, Model) \
                             else keras.models.load_model(model)
@@ -119,17 +118,13 @@ class BaseAlphaZero():
             agent.update(self._model, self._training_step)
     
     def _create_env(self) -> Environment:
-        """Create an appropriate `Environment` instance using given MDP  
-        factory.
-
-        Args:
-            factory (MDPFactory): The MDP factory.
+        """Create an appropriate `Environment` instance.
             
         Returns:
             Environment: The `Environment` instance.
         """
         raise NotImplementedError(f'class {self.__class__} did not override '
-                                   '_create_env().')
+                                  '_create_env().')
     
     def _create_agent(self, model: Model, is_multiagent: bool) -> Agent:
         """Create an appropriate `Agent` instance using given neural networks  
@@ -144,8 +139,8 @@ class BaseAlphaZero():
             Agent: The `Agent` instance.
         """
         raise NotImplementedError(f'class {self.__class__} did not override '
-                                   '_create_agent().')
-
+                                  '_create_agent().')
+    
     def _train_model(self, train_steps: int, epochs: int, batch_size: int,
                      mini_batch_size: int, save_steps: int) -> None:
         """Train the neural networks model of this instance.
@@ -161,9 +156,9 @@ class BaseAlphaZero():
             pass
         
         while self._training_step <= train_steps:
-            model = keras.models.clone_model(self._model)
+            model = self._create_model()
             model.set_weights(self._model.get_weights())
-            
+
             x, y = self._replay_buffer.sample(batch_size)
             model.fit(x, y, batch_size=mini_batch_size, epochs=epochs)
             
@@ -174,6 +169,12 @@ class BaseAlphaZero():
             self._training_step += 1
         
         self._done_training = True
+        
+    def _create_model(self) -> Model:
+        """Create an appropriate `Model` instance.
+        """
+        raise NotImplementedError(f'class {self.__class__} did not override '
+                                  '_create_model().')    
         
     def infer(self, preserve: bool) -> None:
         """Infer a solution of the problem.
@@ -188,8 +189,10 @@ class AlphaZero(BaseAlphaZero):
     """AlphaZero algorithm.
 
     Note:
-        - Descendants of this class should call `AlphaZero.__init__()` in its
+        - Descendants of this class should call `AlphaZero.__init__()` in their
           `__init__()`.
+        - Descendants of this class should override
+          `BaseAlphaZero._create_env()` and `BaseAlphaZero._create_model()`.
     
     Attributes:
         _concentration (float): Concentration parameter.
@@ -202,16 +205,19 @@ class AlphaZero(BaseAlphaZero):
         ```python
         class MyAlphaZero(AlphaZero):
             
-            def create_env(self):
+            def _create_env(self):
                 return MyEnvironment()
+            
+            def _create_model(self):
+                return Model(MyReprNet(), MyDynamics(), MyPredNet())
         
-        #instantiates your AlphaZero.
+        # instantiates your AlphaZero.
         my_az = MyAlphaZero(...)
         
-        #training.
+        # training.
         my_az.train(...)
         
-        #inference.
+        # inference.
         my_az.infer(...)
         ```
     """
