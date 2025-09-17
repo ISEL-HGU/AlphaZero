@@ -9,36 +9,33 @@ from alphazero.mdp.reward import Reward
 from alphazero.mdp.state import Observation, State
 from alphazero.components.simulator import Simulator
 
-
+@keras.saving.register_keras_serializable('nn')
 class Model(tf.keras.Model):
     """Neural networks model that combines representation network,  
     prediction network, and dynamics network.
 
     Attributes:
         _repr_net (tf.keras.layers.Layer): Representation network.
-        _pred_net (tf.keras.layers.Layer): Prediction network.
         _dynamics (Simulator or tf.keras.layers.Layer): Dynamics.
+        _pred_net (tf.keras.layers.Layer): Prediction network.
     """
     
     def __init__(self, repr_net: tf.keras.layers.Layer, 
-                 pred_net: tf.keras.layers.Layer, 
                  dynamics: tf.keras.layers.Layer | Simulator,
-                 **kwargs):
+                 pred_net: tf.keras.layers.Layer):
         """Initialize `Model` instance.
 
         Args:
             repr_net (tf.keras.layers.Layer): Representation network.
             pred_net (tf.keras.layers.Layer): Prediction network.
-            dynamics (Simulator or tf.keras.layers.Layer): Dynamics.
-            **kwargs: Keyword arguments for initializing this instance.
+            dynamics (tf.keras.layers.Layer or Simulator): Dynamics.
         """
-        super(Model, self).__init__(**kwargs)
+        super(Model, self).__init__()
         
         self._repr_net = repr_net
-        self._pred_net = pred_net
         self._dynamics = dynamics
-
-    
+        self._pred_net = pred_net
+        
     @classmethod
     def from_config(cls, config):
         config['repr_net'] = keras.saving.deserialize_keras_object(
@@ -83,7 +80,7 @@ class Model(tf.keras.Model):
             tuple: Immediate reward and next state.
         """
         if isinstance(self._dynamics, Simulator):
-            return self._dynamics.simulate(s, a)
+            return self._dynamics.simulate_on_state(s, a)
         else: 
             r_args, s_repr = self._dynamics([s.get_repr(), a.to_repr()])
         
@@ -100,11 +97,39 @@ class Model(tf.keras.Model):
         else: 
             return self._pred_net(s_repr) + self._dynamics([s_repr, a_repr])
 
+    def get_weights(self):
+        if isinstance(self._dynamics, tf.keras.layers.Layer):
+            return (self._repr_net.get_weights(), self._dynamics.get_weights(),
+                    self._pred_net.get_weights()) 
+        else:
+            return (self._repr_net.get_weights(), self._pred_net.get_weights())
+    
     def get_config(self):
-        return {**super(Model, self).get_config(), 'repr_net': self._repr_net,
-                'pred_net': self._pred_net, 'dynamics': self._dynamics}
-
-
+        return {'repr_net': self._repr_net, 'pred_net': self._pred_net, 
+                'dynamics': self._dynamics}
+    
+    def set_weights(self, weights):
+        if len(weights) == 2:
+            if isinstance(self._dynamics, tf.keras.layers.Layer):
+                raise ValueError('weights should be length of 3 (not 2) if '
+                                 'dynamics of the model is network.')
+    
+            for net, w in zip([self._repr_net, self._pred_net], weights):
+                net.set_weights(w)
+        elif len(weights) == 3:
+            if isinstance(self._dynamics, Simulator):
+                raise ValueError('weights should be lenght of 2 (not 3) if '
+                                 'dynamcis of the model is simulator.')
+            
+            for net, w in \
+                    zip([self._repr_net, self._dynamics, self._pred_net],
+                        weights):
+                net.set_weights(w)
+        else: 
+            raise ValueError('weights should be length of either 2 or 3 '
+                             f'(not {len(weights)}).')
+            
+         
 class AlphaZeroModel(tf.keras.Model):
     """Neural network model of alphazero.
     
