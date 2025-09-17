@@ -2,14 +2,12 @@
 
 import tensorflow as tf
 
-from alphazero.tree.node import Node
-
 
 class PolicyImprovement():
     """Base policy improvement.
     
     Note:
-        Descendants of `PolicyImprovement` should override `__call__()`.
+        - Descendants of `PolicyImprovement` should override `__call__()`.
     """
     
     def update_param(self, training_step: int) -> None:
@@ -66,7 +64,7 @@ class PVCD(PolicyImprovement):
         """            
         self._temp /= 2
     
-    def __call__(self, root: Node) -> tf.Tensor: 
+    def __call__(self, root) -> tf.Tensor: 
         """Improve policy by using children's visit counts of given root node.
 
         The policy is calculated by applying inverse proportion to children's  
