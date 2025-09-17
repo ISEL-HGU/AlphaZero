@@ -10,10 +10,21 @@ class Simulator():
     """Simulator that outputs reward and next state.
 
     Note:
+        - Descendants of this class should be decorated with  
+          `@keras.saving.register_keras_serializable()`.
         - Descendants of this class should override 
           `simulate_on_observation()`.
+        - Descendants of this class that overrides `Simulator.__init__()`  
+          with some parameters should override `Simulator.get_config()`.
+        - Descendatns of this class that overrides `Simulator.__init__()`
+          with some parameters that contain custom type should override  
+          `Simulator.from_config()`.
     """
-        
+    
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+     
     def simulate_on_state(self, s: State, a: Action) -> tuple[Reward, State]:
         """Simulate given action on given state.
         
@@ -47,4 +58,6 @@ class Simulator():
         """
         raise NotImplementedError(f'class {self.__class__} did not override ' 
                                   'simulate_on_observation()')
-        
+    
+    def get_config(self):
+        return {}
