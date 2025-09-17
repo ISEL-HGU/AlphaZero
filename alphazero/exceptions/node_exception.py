@@ -4,9 +4,10 @@ import enum
 
 
 class NodeExceptionCode(enum.Enum):
-    NON_ROOT = 0
-    UNEXPANDED = 1    
-    TERMINAL = 2
+    NONROOT = 1
+    EXPANDED = 2
+    UNEXPANDED = 3
+    UNDETERMINED = 4
 
     def __str__(self):
         return self.name.swapcase()
@@ -30,3 +31,6 @@ class NodeException(Exception):
         """
         self._exc_code = exc_code
         self._msg = f'cannot call {mqn} if the node is {exc_code}.'       
+
+    def get_exc_code(self):
+        return self._exc_code
