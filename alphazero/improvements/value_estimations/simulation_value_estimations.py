@@ -2,8 +2,6 @@
 
 import tensorflow as tf
 
-from alphazero.tree.node import Node
-
 
 class SimulationValueEstimation():
     """Base simulation dimension value estimation.
@@ -23,7 +21,7 @@ class SimulationValueEstimation():
             float: The state value.
         """
         raise NotImplementedError(f'class {self.__class__} did not override' 
-                                   '__call__().')
+                                  '__call__().')
 
 
 class SoftZ(SimulationValueEstimation):
@@ -36,7 +34,7 @@ class SoftZ(SimulationValueEstimation):
         .. _(Willemsen et al., '22): https://link.springer.com/article/10.1007/s00521-021-05928-5
     """
     
-    def __call__(self, root: Node) -> float:
+    def __call__(self, root) -> float:
         """Estimate empirical state value from given root node.
 
         Note: 
