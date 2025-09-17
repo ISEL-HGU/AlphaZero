@@ -11,8 +11,8 @@ class MDPFactory():
     `Reward` instances.
 
     Note:
-        Descendants of `MDPFactory` should override `create_observation()`,  
-        `create_state()`, `create_action()` and `create_reward()`.
+        - Children of this class should override `create_observation()`,  
+          `create_state()`, `create_action()` and `create_reward()`.
     """
 
     def create_observation(self, *args, start: bool=False) -> Observation:
@@ -32,7 +32,7 @@ class MDPFactory():
         """
         raise NotImplementedError(f'class {self.__class__} did not override '
                                    'create_observation().')
-
+    
     def create_state(self, *args) -> State:
         """Create `State` instance.
 
