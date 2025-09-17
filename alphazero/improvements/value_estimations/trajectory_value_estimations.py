@@ -16,7 +16,7 @@ class TrajectoryValueEstimation():
             history (list): The history.
         """
         raise NotImplementedError(f'class {self.__class__} did not override'
-                                   'eval_all().')
+                                  '__call__().')
 
 
 class FinalOutcome(TrajectoryValueEstimation):
