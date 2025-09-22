@@ -11,8 +11,7 @@ class Environment():
     """Environment that outputs reward and observation.
 
     Note:
-        - Descendants of this class should override `_induce()`. 
-        - Descendants of this class should call `Environment.__init__()` in  
+        - Descendants of this class should call `Environment.__init__()` in
           their `__init__()`.
     
     Attributes:
@@ -54,12 +53,7 @@ class Environment():
                             f'{self.reset.__qualname__} before calling '
                             f'{self.apply.__qualname__}.')
         
-        r_features, o_features = self._simulator.simulate_on_observation(
-                self._o, a)
-        
-        self._r = mdp.factory.create_reward(*r_features)
-        self._o = None if o_features is None \
-                       else mdp.factory.create_observation(*o_features)
+        self._r, self._o = self._simulator.simulate(self._o, a)
     
     def reset(self) -> None: 
         """Reset this instance.
