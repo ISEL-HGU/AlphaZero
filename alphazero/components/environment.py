@@ -27,8 +27,7 @@ class Environment():
         
         Args:
             simulator (Simulator): Simulator.
-            t_limit (int): Maximum time step. `-1` represents infinite time  
-                step.
+            t_limit (int): Maximum time step. `-1` represents infinite horizon.
         """
         self._simulator = simulator
         self._r = None
@@ -54,6 +53,10 @@ class Environment():
                             f'{self.apply.__qualname__}.')
         
         self._r, self._o = self._simulator.simulate(self._o, a)
+        self._t += 1
+        
+        if self._t == self._t_limit:
+            self._o = None
     
     def reset(self) -> None: 
         """Reset this instance.
