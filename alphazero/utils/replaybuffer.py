@@ -35,8 +35,8 @@ class ReplayBuffer():
             n (int): The number of data to be sampled.
         
         Returns:
-            tuple: Input data and output target. Input data is composed of  
-                obseravtion and action representations. Output target is  
+            tuple: Input and target data. Input data is composed of  
+                obseravtion and action representations. Target data is  
                 composed of target policies, state values, and immediate  
                 rewards.
         """
@@ -45,22 +45,22 @@ class ReplayBuffer():
         policies = []
         state_values = []
         rewards = []
-        
-        for i in tf.random.uniform([n], maxval=len(self._histories), 
-                                   dtype=tf.int32):
-            j = tf.random.uniform([], maxval=len(self._histories[i]), 
-                                  dtype=tf.int32) \
+          
+        for history in [self._histories[i] 
+                            for i in tf.random.uniform(
+                                [n], maxval=len(self._histories),
+                                dtype=tf.int32)]:
+            i = tf.random.uniform([], maxval=len(history), dtype=tf.int32) \
                          .numpy()
             
-            observations.append(self._histories[i][j]['o'])
-            actions.append(self._histories[i][j]['a'])
-            policies.append(self._histories[i][j]['pi'])
-            state_values.append(tf.constant(self._histories[i][j]['z']))
-            rewards.append(tf.constant(self._histories[i][j]['u']))
+            observations.append(history[i]['o'])
+            actions.append(history[i]['a'])
+            policies.append(history[i]['pi'])
+            state_values.append(tf.constant(history[i]['z']))
+            rewards.append(tf.constant(history[i]['u']))
         
-        return ([tf.stack(observations), tf.stack(actions)], 
-                [tf.stack(policies), tf.stack(state_values), 
-                 tf.stack(rewards)])
+        return ([tf.stack(observations), tf.stack(actions)],
+                [tf.stack(policies), tf.stack(state_values), tf.stack(rewards)])
 
     def __len__(self):
         return len(self._histories)
